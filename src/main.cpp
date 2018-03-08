@@ -108,6 +108,8 @@ void setup()
     pinMode(5, OUTPUT); // set the LED pin mode
 
     // initialize serial for ESP module
+    // TODO - try setting esp-01 baud rate higher for better response
+    //find fastets baud rate soft serial can manage confortably
     Serial1.begin(9600);
     // initialize ESP module
     WiFi.init(&Serial1);
