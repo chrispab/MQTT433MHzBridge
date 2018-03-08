@@ -36,14 +36,23 @@ void printWifiStatus()
 
 void processGetString(String &getLine)
 {
-    char *socketNumber;
-    char *socketState;
-    char myString[30];
-    const char s[] = " /=";
+    char *command;
+    char *param;
+    char *value;
+    char myString[50];
+    const char s[] = " /?=&"; // delimeter chars for strtok
     char *token;
     char *ptr;
     long ret;
     bool newState = false;
+
+    //poss url format
+    ///test/demo_form.php?name1=value1&name2=value2
+
+    //current call used is like this
+    //Switch TEST_433_Control "TEST_433_Control"  <switch> {http=">[ON:GET:http://192.168.0.230/45=ZON:on] >[OFF:GET:http://192.168.0.230/45=ZOFF:off]" }
+    //http://192.168.0.230/45=ZON
+
     // extract socket num and on or off param
     if (getLine.indexOf("GET /") != -1)
     { // get command detected
@@ -51,51 +60,65 @@ void processGetString(String &getLine)
 
         strcpy(myString, getLine.c_str());
 
+        //string will come in form "GET /<command>?<param>=<value>
         /* get the first token which is GET*/
-        token = strtok(myString, s); // get up to before '='
-
-        Serial.print("token found : ");
+        //1st call of strtok inserts NULLs where any chars match chars in array s[]
+        token = strtok(myString, s); // get up to before '=' pointer
+        Serial.print("1st  token GET found : ");
         Serial.println(token);
         //token = strtok(myString, s);
         //get socket number - "0" to "15"
-        socketNumber = strtok(NULL, s);
+        command = strtok(NULL, s);
+        Serial.print("2nd  token COMMAND found command : ");
+        Serial.println(command);
         //get desired state, 'ON' or 'OFF'
-        socketState = strtok(NULL, s);
-        //}
-        Serial.print("token found socketNumber : ");
-        Serial.println(socketNumber);
-        Serial.print("token found desired state: ");
-        Serial.println(socketState);
+        param = strtok(NULL, s);
+        Serial.print("3rd token PARAM found: ");
+        Serial.println(param);
+
+        //get value of param
+        value = strtok(NULL, s);
+        Serial.print("4th token VALUE found desired state: ");
+        Serial.println(value);
     }
 
     //now send command to socket
 
-    //get the integer val of socketNumber char array
-    ret = strtol(socketNumber, &ptr, 10);
-    //Serial.print("The number(ul int) is : ");
-    Serial.println(ret);
+    
+
     //Serial.print("String part is : ");
     //Serial.println(ptr);
 
-    //calc if command is true or false - converst state string to int 0, or 1
-    if (socketState[1] == 'N')
-    { //mustbe O'N' command
-        newState = true;
-
-    } //else nmust be O'F'F
-    else
+    //check for type of command received
+    if (!strcmp("switch", command))
     {
-        newState = false;
+    //get the integer val of param char array - param - the socket number
+        int socketNum = strtol(param, &ptr, 10);
+        //Serial.print("The number(ul int) is : ");
+        Serial.println(ret); 
+        
+        //calc if command is true or false - converst state string to int 0, or 1
+        
+        if (!strcmp(value,"ON") )
+        { //mustbe ON command
+            newState = true;
+        } //else nmust be OFF
+        else
+        {
+            newState = false;
+        }
+        Serial.print("++++ Send command to socket : ");
+        Serial.print(socketNum);
+        Serial.print(", new  State : ");
+        Serial.println(newState);
+
+        digitalWrite(5, newState); // GET /H turns the LED on
+        transmitter.sendUnit(socketNum, newState);
     }
-    Serial.print("++++ Send command to socket : ");
-    Serial.print(ret);
-    Serial.print(", new  State : ");
-    Serial.println(newState);
-
-    digitalWrite(5, newState); // GET /H turns the LED on
-    transmitter.sendUnit(ret, newState);
+    else{
+        Serial.println("Request not recognised");
+    }
 }
-
 
 void setup()
 { //Initialize serial and wait for port to open:
@@ -158,10 +181,10 @@ void loop()
                 if (c == '\n')
                 {
 
-                    // if the current line is blank, and you got two newline characters in a row.
+                    // if the current line is blank, and you have got two newline characters in a row.
                     // that's the end of the client HTTP request, so send a response:
                     if (currentLine.length() == 0)
-                    //send a response then process the command from the get line if thier was a GET?
+                    //send a response then process the command from the get line if there was a GET?
                     { // send a standard http response header
                         // HTTP headers always start with a response code (e.g. HTTP/1.1 200 OK)
                         // and a content-type so the client knows what's coming, then a blank line:
@@ -214,8 +237,8 @@ void loop()
                 }
                 else if (c != '\r')
                 {
-                    // you've gotten a character on the current line
-                    currentLine += c; // add it to the end of the currentLine
+                    // you've gotten a character on the current line - other than \n or \r
+                    currentLine += c; // add current rxed char it to the end of the currentLine
                 }
             }
         }
