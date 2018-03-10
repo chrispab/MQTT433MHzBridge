@@ -54,7 +54,8 @@ void processGetString(String &getLine)
     //http://192.168.0.230/45=ZON
 
     // extract socket num and on or off param
-    if (getLine.indexOf("GET /") != -1)
+    //if (getLine.indexOf("GET /") != -1)
+    if (1)
     { // get command detected
         Serial.println("GET / - found in response");
 
@@ -66,8 +67,7 @@ void processGetString(String &getLine)
         token = strtok(myString, s); // get up to before '=' pointer
         Serial.print("1st  token GET found : ");
         Serial.println(token);
-        //token = strtok(myString, s);
-        //get socket number - "0" to "15"
+        //get command or page to submit to from "/"command"?"
         command = strtok(NULL, s);
         Serial.print("2nd  token COMMAND found command : ");
         Serial.println(command);
@@ -188,30 +188,30 @@ void loop()
                     { // send a standard http response header
                         // HTTP headers always start with a response code (e.g. HTTP/1.1 200 OK)
                         // and a content-type so the client knows what's coming, then a blank line:
-                        client.println("HTTP/1.1 200 OK");
-                        client.println("Content-Type: text/html");
-                        client.println();
-                        // the content of the HTTP response follows the header:
-                        client.println("<!DOCTYPE HTML>");
+                         client.println("HTTP/1.1 200 OK");
+                        // client.println("Content-Type: text/html");
+                        // client.println();
+                        // // the content of the HTTP response follows the header:
+                        // client.println("<!DOCTYPE HTML>");
 
-                        for (int i = 0; i < 16; i++)
-                        {
-                            client.print("<a href=/");
-                            client.print(i);
-                            client.print("=ON> Turn ON Socket : ");
-                            client.print(i);
-                            client.print("</a><br>");
-                            client.println();
+                        // for (int i = 0; i < 16; i++)
+                        // {
+                            // client.print("<a href=/");
+                            // client.print(i);
+                            // client.print("=ON> Turn ON Socket : ");
+                            // client.print(i);
+                            // client.print("</a><br>");
+                            // client.println();
 
-                            client.print("<a href=/");
-                            client.print(i);
-                            client.print("=OFF> Turn OFF Socket : ");
-                            client.print(i);
-                            client.print("</a><br>");
-                            client.println();
-                        }
+                            // client.print("<a href=/");
+                            // client.print(i);
+                            // client.print("=OFF> Turn OFF Socket : ");
+                            // client.print(i);
+                            // client.print("</a><br>");
+                           //  client.println();
+                        // }
 
-                        client.println();
+                         //client.println();
 
                         //now chck if a GET was received previously
                         //vars for sockt and state should be present
