@@ -15,6 +15,10 @@ WiFiEspServer server(80);
 NewRemoteTransmitter transmitter(282830, 4);
 byte socket = 3;
 bool state = false;
+#define LEDPIN 5
+//Supported baud rates are 300, 600, 1200, 2400, 4800, 9600, 14400, 
+//19200, 28800, 31250, 38400, 57600, and 115200. 
+#define ESP_BAUD 9600
 
 void printWifiStatus()
 {
@@ -113,7 +117,7 @@ boolean processRequest(String &getLine)
         Serial.print(", new  State : ");
         Serial.println(newState);
 
-        digitalWrite(5, newState); // GET /H turns the LED on
+        digitalWrite(LEDPIN, newState); // GET /H turns the LED on
         transmitter.sendUnit(socketNum, newState);
         return true;
     }
@@ -156,23 +160,54 @@ void sendResponse(WiFiEspClient client)
 }
 
 void setup()
-{ //Initialize serial and wait for port to open:
+{ //Initialize serial monitor port and wait for port to open:
     Serial.begin(115200);
     //Serial.begin(9600);
     while (!Serial)
     {
         ; // wait for serial port to connect. Needed for Leonardo only
     }
-    pinMode(5, OUTPUT); // set the LED pin mode
+    pinMode(LEDPIN, OUTPUT); // set the LED pin mode
 
     // initialize serial for ESP module
     // TODO - try setting esp-01 baud rate higher for better response
     //find fastets baud rate soft serial can manage confortably
-    //try with 31250 baud
-    ESPSerial.begin(9600);
+    //try with 31250 baud 8mhz xtal
+    //try 57600 with 16mhz xtal
+    ESPSerial.begin(ESP_BAUD);
+    Serial.println("Sending an AT command...");
+    ESPSerial.println("AT+UART_CUR?");
+    delay(30);
+    while (ESPSerial.available())
+    {
+        String inData = ESPSerial.readStringUntil('\n');
+        Serial.println("Got reponse from ESP8266: " + inData);
+    }
+    //query current settings
+    //Serial.println(ESPSerial.println("AT+UART_CUR?"));
+
+    //////////////////////////////////////////////////////
+    //  ESPSerial.println("AT+UART_CUR=14400,8,1,0,0");
+    //  delay(300);
+    //  ESPSerial.end();
+    // // delay(300);
+    //  ESPSerial.begin(14400);
+    //////////////////////////////////////////////////
+
+
+    ESPSerial.println("AT+UART_CUR?");
+    delay(30);
+    while (ESPSerial.available())
+    {
+        String inData = ESPSerial.readStringUntil('\n');
+        Serial.println("Got NEW reponse from ESP8266: " + inData);
+    }
+    delay(300);
+    //set baud rate for this session to 57600 - not saved in flash
+    // AT+UART_CUR=115200,8,1,0,3
+
     // initialize ESP module
     WiFi.init(&ESPSerial);
-
     // check for the presence of the shield:
     if (WiFi.status() == WL_NO_SHIELD)
     {
