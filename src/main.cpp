@@ -1,6 +1,13 @@
-//#include <SPI.h>
+// create new bboard to test
+//work only using wifiesp lib as connection to net
+
+
+#include <SPI.h>
 #include <WiFiEsp.h>
 #include <NewRemoteTransmitter.h>
+
+#include <PubSubClient.h>
+
 
 char ssid[] = "notwork";                              // your network SSID (name)
 char pass[] = "a new router can solve many problems"; // your network password
@@ -12,6 +19,14 @@ int status = WL_IDLE_STATUS;
 SoftwareSerial ESPSerial(7, 6); // RX, TX
 
 WiFiEspServer server(80);
+
+
+IPAddress mqttserver(172, 16, 0, 2);
+
+
+//WiFiEspClient client = server.available();
+//EthernetClient ethClient;
+
 NewRemoteTransmitter transmitter(282830, 4);
 byte socket = 3;
 bool state = false;
@@ -19,6 +34,19 @@ bool state = false;
 //Supported baud rates are 300, 600, 1200, 2400, 4800, 9600, 14400, 
 //19200, 28800, 31250, 38400, 57600, and 115200. 
 #define ESP_BAUD 9600
+
+
+void callback(char* topic, byte* payload, unsigned int length) {
+  // handle message arrived mqtt pubsub
+
+}
+
+
+WiFiEspClient WiFiEClient;
+PubSubClient client(mqttserver, 1883, callback, WiFiEClient);
+
+
+
 
 void printWifiStatus()
 {
@@ -231,10 +259,17 @@ void setup()
     server.begin();
     // you're connected now, so print out the status:
     printWifiStatus();
+
+      if (client.connect("arduinoClient", "testuser", "testpass")) {
+    client.publish("outTopic","hello world");
+    client.subscribe("inTopic");
+  }
 }
 
 void loop()
 {
+      client.loop();
+
     // listen for incoming clients
     WiFiEspClient client = server.available();
 
