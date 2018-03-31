@@ -4,9 +4,4 @@
 .vscode/launch.json
 .vscode/*.db
 .vscode/.browse.c_cpp.db*
-.vscode/.browse.c_cpp.db-shm
-.vscode/.browse.c_cpp.db-wal
-.vscode/.browse.c_cpp.db-shm
-.vscode/.browse.c_cpp.db-wal
 .gitignore
-.vscode/.browse.c_cpp.db-shm

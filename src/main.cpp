@@ -2,7 +2,7 @@
 //work only using wifiesp lib as connection to net
 
 
-#include <SPI.h>
+//#include <SPI.h>
 #include <WiFiEsp.h>
 #include <NewRemoteTransmitter.h>
 
