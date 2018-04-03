@@ -12,6 +12,7 @@ void printWifiStatus();
 boolean processRequest(String &getLine);
 void sendResponse(WiFiEspClient client);
 void listenForClients(void);
+void LEDBlink(int LEDPin, int repeatNum);
 
 char ssid[] = "notwork";                              // your network SSID (name)
 char pass[] = "a new router can solve many problems"; // your network password
@@ -32,22 +33,92 @@ IPAddress mqttserver(192, 168, 0, 200);
 NewRemoteTransmitter transmitter(282830, 4);
 byte socket = 3;
 bool state = false;
+
+uint8_t socketNumber = 0;
+
 #define LEDPIN 5
 //Supported baud rates are 300, 600, 1200, 2400, 4800, 9600, 14400,
 //19200, 28800, 31250, 38400, 57600, and 115200.
 #define ESP_BAUD 9600
+#define CR Serial.println()
+
+//#define subscribeTopic "Outside_Sensor/#"
+
+#define subscribeTopic "433Bridge/cmnd/#"
 
 void callback(char *topic, byte *payload, unsigned int length)
 {
+    // Power<x> 		Show current power state of relay<x> as On or Off
+    // Power<x> 	0 / off 	Turn relay<x> power Off
+    // Power<x> 	1 / on 	Turn relay<x> power On
     // handle message arrived mqtt pubsub
-    Serial.println("Rxed a mesage from broker : ");
-    
-    //char payload[255];
+
+    // Serial.println("Rxed a mesage from broker : ");
+
     payload[length] = '\0';
-    String s = String((char*)payload);
-    
-    Serial.print( s );
-    Serial.println("--EOP");
+    String s = String((char *)payload);
+    // //float f = s.toFloat();
+    // Serial.print(s);
+    // Serial.println("--EOP");
+
+    CR;
+    Serial.print("Message arrived [");
+    Serial.print(topic);
+    Serial.print("] ");
+    for (int i = 0; i < length; i++)
+    {
+        Serial.print((char)payload[i]);
+    }
+    CR;
+    Serial.println();
+    //search for a match to the incoming topic
+    //form of Message "sonoff_FR/stat/POWER<n>" OFF
+    // where <n> is the socket number 1-16
+    //e.g topic = "433Bridge/cmnd/Power1", and payload = 1 or 0
+    // either match whole topic string or trim off last 1or 2 chars and convert to a number
+    //convert last 1-2 chars to socket number
+    //get last char
+    char lastChar = topic[strlen(topic) - 1]; //lst char will always be a digit char
+    //see if last but 1 is also a digit char - ie number has two digits - 10 to 16
+    char lastButOneChar = topic[strlen(topic) - 2];
+
+    if ((lastButOneChar >= '0') && (lastButOneChar <= '9'))
+    {                                                                    // is it a 2 digit number
+        socketNumber = ((lastButOneChar - '0') * 10) + (lastChar - '0'); // calc actual int
+    }
+    else
+    {
+        socketNumber = (lastChar - '0');
+    }
+
+    socketNumber--;       // convert from 1-16 range to 0-15 range sendUnit uses
+    uint8_t newState = 0; // default to off
+    if ((payload[0] - '1') == 0)
+    {
+        newState = 1;
+    }
+    transmitter.sendUnit(socketNumber, newState);
+    LEDBlink(LEDPIN, socketNumber); // blink socketNumber times
+
+    digitalWrite(LEDPIN, newState);
+    // if (!strcmp(topic, "433Bridge/cmnd/Power5"))
+    // {
+    //     digitalWrite(LEDPIN, 1); // GET /H turns the LED on
+    //     delay(100);
+    //     digitalWrite(LEDPIN, 0); // GET /H turns the LED on
+    // }
+    // last char
+}
+
+void LEDBlink(int LPin, int repeatNum)
+{
+    for (int i = 0; i < repeatNum; i++)
+    {
+        digitalWrite(LPin, 1); // GET /H turns the LED on
+        delay(50);
+        digitalWrite(LPin, 0); // GET /H turns the LED on
+        delay(50);
+    }
 }
 
 WiFiEspClient WiFiEClient;
@@ -69,41 +140,60 @@ void setup()
     //try with 31250 baud 8mhz xtal
     //try 57600 with 16mhz xtal
 
-    //open at 9600 (default)
+    //  To then change the esp-01 from default baud rate of 115200
+    // to 57600 for current session
+    // AT+UART_CUR=57600,8,1,0,0 – N0TE NO FLOW CTL – DIFF TO EXSPREIF EXAMPLE
+    // AT+UART_CUR=57600,8,1,0,0
+    // reopen serial terminal at 57600 and test
+    // AT
+    // AT+GMR
+
+    //open at power up default BAUD rate - currently set to 9600 to
+    // allow use of software serial to ESP-01 module
     ESPSerial.begin(ESP_BAUD);
     //get current baud for this session
-    Serial.println("Sending an AT command...");
+    Serial.println("Get startup BAUD rate ...");
     ESPSerial.println("AT+UART_CUR?");
     delay(30);
-
     while (ESPSerial.available())
     {
         String inData = ESPSerial.readStringUntil('\n');
-        Serial.println("Got reponse from ESP8266: " + inData);
+        Serial.println("Got response from ESP-01: " + inData);
     }
 
     //set working baud for this session
     Serial.println("Sending an AT command...");
     ESPSerial.println("AT+UART_CUR?"); //ADD SET COMMAND
     delay(30);
-
     while (ESPSerial.available())
     {
         String inData = ESPSerial.readStringUntil('\n');
-        Serial.println("Got reponse from ESP8266: " + inData);
+        Serial.println("Got response from ESP-01: " + inData);
     }
     //query current settings
     //Serial.println(ESPSerial.println("AT+UART_CUR?"));
 
     //////////////////////////////////////////////////////
-    //  ESPSerial.println("AT+UART_CUR=14400,8,1,0,0");
-    //  delay(300);
-    //  ESPSerial.end();
-    // // delay(300);
-    //  ESPSerial.begin(14400);
+    // ESPSerial.println("AT+UART_CUR=57600,8,1,0,0");
+    //     ESPSerial.println("AT+UART_CUR=14400,8,1,0,0");
+    // delay(300);
+    // ESPSerial.end();
+    // delay(300);
+    // ESPSerial.begin(14400);
+    // delay(3000);
+    // Serial.println("ask AT-");
+    // ESPSerial.println("AT");
+    // delay(30);
+    // while (ESPSerial.available())
+    // {
+    //     String inData = ESPSerial.readStringUntil('\n');
+    //     Serial.println("atrst response: " + inData);
+    // }
+
     //////////////////////////////////////////////////
 
     //show new working baud
+    Serial.println("ask ESP-01 for it's current baud rate---------");
     ESPSerial.println("AT+UART_CUR?");
     delay(30);
     while (ESPSerial.available())
@@ -111,7 +201,7 @@ void setup()
         String inData = ESPSerial.readStringUntil('\n');
         Serial.println("current working BAUD response from ESP-01: " + inData);
     }
-    delay(300);
+    delay(1000);
     //set baud rate for this session to 57600 - not saved in flash
     // AT+UART_CUR=115200,8,1,0,3
 
@@ -137,21 +227,54 @@ void setup()
         // wait 10 seconds for connection:
         delay(3000);
     }
-    server.begin();
+    //server.begin();
     // you're connected now, so print out the status:
     printWifiStatus();
 
-    if (psclient.connect("arduinoClient", "testuser", "testpass"))
+    if (psclient.connect("ESP8266Clien"))
     {
         psclient.publish("outTopic", "hello world");
-        psclient.subscribe("Outside_Sensor/tele/SENSOR");
+        //psclient.subscribe("Outside_Sensor/#");
+        psclient.subscribe(subscribeTopic);
+        //psclient.subscribe("");
+    }
+}
+
+void reconnect()
+{
+    // Loop until we're reconnected
+    while (!psclient.connected())
+    {
+        Serial.print("Attempting MQTT connection...");
+        // Attempt to connect
+        if (psclient.connect("ESP8266Client"))
+        {
+            Serial.println("connected");
+            // Once connected, publish an announcement...
+            psclient.publish("outTopic", "hello world");
+            // ... and resubscribe
+            //psclient.subscribe("inTopic");
+            psclient.subscribe(subscribeTopic);
+        }
+        else
+        {
+            Serial.print("failed, rc=");
+            Serial.print(psclient.state());
+            Serial.println(" try again in 5 seconds");
+            // Wait 5 seconds before retrying
+            delay(5000);
+        }
     }
 }
 
 void loop()
 {
-    //psclient.loop();
-    listenForClients();
+    if (!psclient.connected())
+    {
+        reconnect();
+    }
+    psclient.loop();
+    // listenForClients();
 }
 
 void listenForClients(void)
@@ -209,6 +332,7 @@ void listenForClients(void)
         Serial.println("client disconnected!!");
     }
 }
+
 void printWifiStatus()
 {
     // print the SSID of the network you're attached to:
