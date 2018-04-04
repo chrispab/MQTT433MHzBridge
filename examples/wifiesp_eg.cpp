@@ -1,5 +1,5 @@
 /*
- /*
+ 
  Basic Arduino UNO + ESP8266-01 MQTT example
 
  It connects to an MQTT server then:
