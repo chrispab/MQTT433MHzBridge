@@ -13,7 +13,9 @@ void sendResponse(WiFiEspClient client);
 void listenForClients(void);
 void LEDBlink(int LEDPin, int repeatNum);
 void callback(char *topic, byte *payload, unsigned int length);
-void reconnect();
+void reconnectPSClient();
+void reconnectWiFiEsp();
+void operateSocket(uint8_t socketID, uint8_t state);
 
 char ssid[] = "notwork";                              // your network SSID (name)
 char pass[] = "a new router can solve many problems"; // your network password
@@ -31,24 +33,34 @@ IPAddress mqttserver(192, 168, 0, 200);
 //WiFiEspClient client = server.available();
 //EthernetClient ethClient;
 
-NewRemoteTransmitter transmitter(282830, 4);
+NewRemoteTransmitter transmitter(282830, 4); // tx address, pin for tx
 byte socket = 3;
 bool state = false;
 
 uint8_t socketNumber = 0;
 
 #define LEDPIN 5
-//Supported baud rates are 300, 600, 1200, 2400, 4800, 9600, 14400,
-//19200, 28800, 31250, 38400, 57600, and 115200.
+//Supported baud rates are 300, 600, 1200, 2400, 4800, 9600,
+//
+//tried - too fast -14400,19200, 28800,  31250,38400, 57600, and 115200.
+//#define ESP_BAUD 9600
+//#define ESP_BAUD 38400
+
+// AT+UART_DEF=4800,8,1,0,0
+// reopen serial terminal at 57600 and test
+// AT
+// AT+GMR
 #define ESP_BAUD 9600
 #define CR Serial.println()
-
-//#define subscribeTopic "Outside_Sensor/#"
 
 #define subscribeTopic "433Bridge/cmnd/#"
 
 WiFiEspClient WiFiEClient;
 PubSubClient psclient(mqttserver, 1883, callback, WiFiEClient);
+
+unsigned long currentMillis = 0;
+unsigned long previousMillis = 0;
+unsigned long interval = 60000;
 
 void setup()
 { //Initialize serial monitor port to PC and wait for port to open:
@@ -157,24 +169,68 @@ void setup()
     printWifiStatus();
     CR;
     //delay(5000);
-    reconnect();
-    // if (psclient.connect("ESP8266Client"))
-    // {
-    //     psclient.publish("outTopic", "hello world");
-    //     //psclient.subscribe("Outside_Sensor/#");
-    //     psclient.subscribe(subscribeTopic);
-    //     //psclient.subscribe("");
-    // }
+    reconnectPSClient();
 }
 
 void loop()
 {
-    if (!psclient.connected())
-    {
-        reconnect();
-    }
     psclient.loop();
-    // listenForClients();
+
+    //maybe check every n secs to see if client is connected and reconnect if reqd
+
+    currentMillis = millis();
+    if (currentMillis - previousMillis > interval)
+    {
+        Serial.println("Checking if WiFi needs reconnect"); // save the last time looped
+
+        if (status != WL_CONNECTED)
+        {
+            Serial.println("Wifi Needs reconnect");
+            reconnectWiFiEsp();
+        }
+        else
+        {
+            Serial.println("OK - WiFi still connected");
+            Serial.println(millis());
+        }
+
+        Serial.println("Checking if psclient needs reconnect"); // save the last time looped
+        previousMillis = currentMillis;
+        if (!psclient.connected())
+        {
+            Serial.println("Needs reconnect");
+            reconnectPSClient();
+        }
+        else
+        {
+            Serial.println("OK - still connected");
+            Serial.println(millis());
+        }
+    }
+
+    //====================================================
+    // critical setting
+    //_SS_MAX_RX_BUFF 256 // RX buffer size, was 64 , use 256 if  lots retained messages coming
+    // in softwareSerial.h
+    //=============================================
+
+    //70, 1217685 to 4380446 t= 3162761
+    //70, 17065,
+    //60, 17020 to 733907, 4324527, 15234925
+    //50, 17030, 662313,
+    //80,
+    // 75, 16989, 2405623
+    //65, 17011,
+    // currentMillis = millis();
+
+    // if (currentMillis - previousMillis > interval)
+    // {
+    //     // save the last time looped
+    //     previousMillis = currentMillis;
+    //psclient.loop();
+    //}
+    //delay(60);
+    //psclient.loop();
 }
 
 void callback(char *topic, byte *payload, unsigned int length)
@@ -186,6 +242,7 @@ void callback(char *topic, byte *payload, unsigned int length)
 
     // Serial.println("Rxed a mesage from broker : ");
 
+    //do some extra checking on rxed topic and payload
     payload[length] = '\0';
     //String s = String((char *)payload);
     // //float f = s.toFloat();
@@ -202,9 +259,6 @@ void callback(char *topic, byte *payload, unsigned int length)
     }
     CR;
     Serial.println();
-    //search for a match to the incoming topic
-    //form of Message "sonoff_FR/stat/POWER<n>" OFF
-    // where <n> is the socket number 1-16
     //e.g topic = "433Bridge/cmnd/Power1", and payload = 1 or 0
     // either match whole topic string or trim off last 1or 2 chars and convert to a number
     //convert last 1-2 chars to socket number
@@ -228,25 +282,82 @@ void callback(char *topic, byte *payload, unsigned int length)
     {
         newState = 1;
     }
-    transmitter.sendUnit(socketNumber, newState);
-    LEDBlink(LEDPIN, socketNumber); // blink socketNumber times
+
+    Serial.println(millis());
+
+    //maybe call a few times
+    Serial.println(F("txing to socket"));
+
+    transmitter.sendUnit(socketNumber, newState); // default 4 tx to socket
+    //operateSocket(socketNumber, newState);
+    //LEDBlink(LEDPIN, socketNumber); // blink socketNumber times
 
     digitalWrite(LEDPIN, newState);
-    // if (!strcmp(topic, "433Bridge/cmnd/Power5"))
-    // {
-    //     digitalWrite(LEDPIN, 1); // GET /H turns the LED on
-    //     delay(100);
-    //     digitalWrite(LEDPIN, 0); // GET /H turns the LED on
-    // }
-    // last char
 }
 
-void reconnect()
+void operateSocket(uint8_t socketID, uint8_t state)
+{
+    //this is a blocking routine so need to keep checking messages and
+    //updating vars etc
+    // but do NOT do manage restarts as could be recursive and call this routine again.
+
+    //if (transmitEnable == 1)
+    //{
+    Serial.println(F("txing to socket"));
+    //badLED();
+    //beep(1, 2, 1);
+    for (int i = 0; i < 2; i++)
+    { // turn socket off
+        //	processMessage();
+        //	updateDisplay();
+        transmitter.sendUnit(socketID, state);
+    }
+
+    Serial.println(F("socket state updated"));
+    //printD2Str("Power on :", devices[deviceID].name);
+
+    // for (int i = 0; i < 3; i++)
+    // { // turn socket back on
+    // //	processMessage();
+    // //	updateDisplay();
+    // 	transmitter.sendUnit(socketID, true);
+    // }
+    // processMessage();
+    // updateDisplay();
+    // LEDsOff();
+    // //beep(1, 2, 1);
+    Serial.println(F("OK"));
+    // }
+    // else
+    // {
+    // 	Serial.println(F("not transmitting"));
+    // }
+}
+
+void reconnectWiFiEsp()
 {
     // Loop until we're reconnected
+    //check is psclient is connected first
+    // attempt to connect to Wifi network:
+    while (status != WL_CONNECTED)
+    {
+        Serial.print("Attempting to connect to SSID: ");
+        Serial.println(ssid);
+        // Connect to WPA/WPA2 network. Change this line if using open or WEP network:
+        status = WiFi.begin(ssid, pass);
+
+        // wait 10 seconds for connection:
+        delay(5000);
+    }
+}
+
+void reconnectPSClient()
+{
+    // Loop until we're reconnected
+    //check is psclient is connected first
     while (!psclient.connected())
     {
-        Serial.print("Attempting MQTT connection...");
+        Serial.println("Attempting MQTT connection...");
         // Attempt to connect
         if (psclient.connect("ESP8266Client"))
         {
