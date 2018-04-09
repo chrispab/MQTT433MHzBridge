@@ -40,6 +40,9 @@ bool state = false;
 uint8_t socketNumber = 0;
 
 #define LEDPIN 5
+
+//remote info
+//jo's remote (bedroom),
 //Supported baud rates are 300, 600, 1200, 2400, 4800, 9600,
 //
 //tried - too fast -14400,19200, 28800,  31250,38400, 57600, and 115200.
@@ -61,6 +64,11 @@ PubSubClient psclient(mqttserver, 1883, callback, WiFiEClient);
 unsigned long currentMillis = 0;
 unsigned long previousMillis = 0;
 unsigned long interval = 60000;
+
+
+//software serial 
+//#define _SS_MAX_RX_BUFF 256 // RX buffer size
+
 
 void setup()
 { //Initialize serial monitor port to PC and wait for port to open:
@@ -88,6 +96,8 @@ void setup()
     ESPSerial.begin(ESP_BAUD);
     //get current baud for this session
     delay(40);
+
+    Serial.println(_SS_MAX_RX_BUFF);
 
     Serial.println("Get startup BAUD rate ...");
     ESPSerial.println("AT+UART_CUR?");
